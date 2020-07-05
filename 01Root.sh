@@ -637,18 +637,6 @@ if [ -e /opt/google/containers/android/system.raw.img ]; then
   fi
   
 fi
-# Check if the SuperSU 'common directory' is already present in ~/Downloads. If not, we will try to download it (and unzip it with BusyBox).
-
-if [ ! -e /home/chronos/user/Downloads/common ]; then
-  echo "SuperSU files not found in ~/Downloads! Attempting to download BusyBox and SuperSU now..."
-  mkdir -p /tmp/aroc
-  cd /tmp/aroc
-  
-  download_busybox
-  
-  download_supersu
-  
-fi
 
 sleep 0.1
 
@@ -659,203 +647,9 @@ mkdir -p /usr/local/Android_Images/Mounted
 
 mount -o loop,rw,sync /usr/local/Android_Images/system.raw.expanded.img /usr/local/Android_Images/Mounted 2>/dev/null
 
-# Set the right directory from which to copy the su binary.
-
-case "$ANDROID_ARCH" in
-armv7)
-SU_ARCHDIR=/home/chronos/user/Downloads/armv7
-;;
-esac
-
-case "$ANDROID_ARCH" in
-x86)
-SU_ARCHDIR=/home/chronos/user/Downloads/x86
-;;
-esac
-
-# In case the above doesn't exist, try to download it.
-
-if [ ! -e $SU_ARCHDIR ]; then
-  download_busybox
-  
-  download_supersu
-fi
-              common=/home/chronos/user/Downloads/common
-              system=/usr/local/Android_Images/Mounted/system
-              #system_original=/opt/google/containers/android/rootfs/root/system
-
-#if [ $ANDROID_ARCH=armv7 ]; then
-#              SU_ARCHDIR=/home/chronos/user/Downloads/armv7
-#  else
-#              SU_ARCHDIR=/home/chronos/user/Downloads/x86
-#fi
-
-# If we downloaded Busybox earlier, we may as well copy it to /system (although we don't need to).
-
-if [ -e /tmp/aroc/busybox ]; then
-  echo "Copying BusyBox to /system/xbin"
-  cp  /tmp/aroc/busybox $system/xbin
-  chown 655360 $system/xbin/busybox
-  chgrp 655360 $system/xbin/busybox
-  chmod a+x $system/xbin/busybox
-fi
-
-echo "Now placing SuperSU files. Locations as indicated by the SuperSU update-binary script."
-
 sleep 0.1
 
 echo
-
-# Copy SuperSU files to $system
-    
-echo "Creating SuperSU directory in system/priv-app, copying SuperSU apk, and setting its permissions and contexts"
-
-cd $system/priv-app
-  mkdir -p $system/priv-app/SuperSU
-  chown 655360 $system/priv-app/SuperSU
-  chgrp 655360 $system/priv-app/SuperSU
-  
-cd $system/priv-app/SuperSU
-  cp $common/Superuser.apk $system/priv-app/SuperSU/SuperSU.apk
-
-  chmod 0644 $system/priv-app/SuperSU/SuperSU.apk
-  chcon u:object_r:system_file:s0 $system/priv-app/SuperSU/SuperSU.apk
-  chown 655360 $system/priv-app/SuperSU/SuperSU.apk
-  chgrp 655360 $system/priv-app/SuperSU/SuperSU.apk
-
-sleep 0.1
-
-# For arm Chromebooks we need /armv7/su, but for for Intel Chromebooks we need /x86/su.pie
-
-case "$ANDROID_ARCH" in
-armv7)
-copy_su_armv7
-;;
-esac
-
-case "$ANDROID_ARCH" in
-x86)
-copy_su_x86
-;;
-esac
-
-echo "Copying supolicy to system/xbin, libsupol to system/lib and setting permissions and contexts"
-
-cd $system/xbin
-
-  cp $SU_ARCHDIR/supolicy $system/xbin/supolicy
-
-  chmod 0755 $system/xbin/supolicy
-  chown 655360 $system/xbin/supolicy
-  chgrp 655360 $system/xbin/supolicy
-  chcon u:object_r:system_file:s0 $system/xbin/supolicy
-
-cd $system/lib
-
-  cp $SU_ARCHDIR/libsupol.so $system/lib/libsupol.so
-
-  chmod 0644 $system/lib/libsupol.so
-  chown 655360 $system/lib/libsupol.so
-  chgrp 655360 $system/lib/libsupol.so
-  chcon u:object_r:system_file:s0 $system/lib/libsupol.so
-  
-sleep 0.1
-
-echo "Copying sh from system/bin/sh to system/xbin/sugote-mksh and setting permissions and contexts"
-
-cd $system/bin
-
-  cp $system/bin/sh ../xbin/sugote-mksh
-
-cd $system/xbin
-
-  chmod 0755 $system/xbin/sugote-mksh
-  chcon u:object_r:system_file:s0 $system/xbin/sugote-mksh
-  
-# Hijacking app_process (below) worked on Marshmallow. Does not aooear to work on N.
-# One approach that does work on Nougat: modifying init.*.rc instead.
-  
-#echo "Moving app_process32"
-
-#cd $system/bin/
-
-#  cp app_process32 $system/bin/app_process32_original
-#  chmod 0755 $system/bin/app_process32_original
-#  chcon u:object_r:zygote_exec:s0 $system/bin/app_process32_original
-
-#  cp $system/bin/app_process32 $system/bin/app_process_init
-
-#chmod 0755 $system/bin/app_process_init
-#chcon u:object_r:system_file:s0 $system/bin/app_process_init
-
-#sleep 1
-
-#echo "Deleting original app_process, app_process32"
-
-#  rm $system/bin/app_process
-#  rm $system/bin/app_process32
-
-#sleep 1
-
-#echo "Symlinking app_process, app_process32 to system/xbin/daemonsu"
-
-#cd $system/xbin
-
-#  ln -s -r daemonsu ../bin/app_process
-#  ln -s -r daemonsu ../bin/app_process32
-
-#sleep 1
-
-echo "Adding extra files system/etc/.installed_su_daemon and system/etc/install-recovery.sh"
-
-cd $system/etc
-
-  touch  $system/etc/.installed_su_daemon
-
-  chmod 0644  $system/etc/.installed_su_daemon
-  chcon u:object_r:system_file:s0  $system/etc/.installed_su_daemon
-
-  cp $common/install-recovery.sh  $system/etc/install-recovery.sh
-  
-  chmod 0755  $system/etc/install-recovery.sh
-  chown 655360 $system/etc/install-recovery.sh
-  chgrp 655360 $system/etc/install-recovery.sh
-  chcon u:object_r:toolbox_exec:s0  $system/etc/install-recovery.sh
-
-echo "Symlinking system/bin/install-recovery.sh to system/etc/install-recovery.sh"
-
-  ln -s -r install-recovery.sh ../bin/install-recovery.sh
-  
-echo "Adding system/bin/daemonsu-service.sh"
-
-cp $common/install-recovery.sh  $system/bin/daemonsu-service.sh
-  
-chmod 0755  $system/bin/daemonsu-service.sh
-chown 655360 $system/bin/daemonsu-service.sh
-chgrp 657360 $system/bin/daemonsu-service.sh
-
-chcon u:object_r:toolbox_exec:s0  $system/bin/daemonsu-service.sh
-
-echo "Creating file init.super.rc in Android rootfs"
-
-touch  $system/../init.super.rc
-
-chmod 0750 $system/../init.super.rc
-chown 655360 $system/../init.super.rc
-chgrp 657360 $system/../init.super.rc
-
-echo "Adding daemonsu service to init.super.rc"
-
-echo "service daemonsu /system/bin/daemonsu-service.sh service
-    class late_start
-    user root
-    seclabel u:r:supersu:s0
-    oneshot" >>  $system/../init.super.rc
-    
-echo "Adding 'import /init.super.rc' to existing init.rc"
-
-sed -i '7iimport /init.super.rc' $system/../init.rc
-
 # In recent CrOS versions (v70+), for a writable /system, currently it also seems to be necessary to edit init.rc (to switch 'ro' to 'rw')
 
 echo "Substituting '|mount rootfs rootfs / remount bind rw' for '|mount rootfs rootfs / remount bind ro' in existing init.rc"
@@ -863,7 +657,6 @@ echo "A backup of init.rc will be stored as init.rc.old"
 
 sed -i.old 's|mount rootfs rootfs / remount bind ro|mount rootfs rootfs / remount bind rw|g' $arc_system/../init.rc
 
-# SuperSU copying script ends
 
 echo "Removing temporary files"
 rm -rf /tmp/aroc
